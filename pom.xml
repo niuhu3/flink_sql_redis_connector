@@ -85,7 +85,7 @@
                     <archive>
                         <manifest>
                             <!-- 此处填写程序的主入口(main方法) -->
-                            <mainClass>com.longi.dws.DwsTradeCartAddUuWindow</mainClass>
+                            <mainClass>org.apache.flink.RedisSourceSinkFactory</mainClass>
                         </manifest>
                     </archive>
                 </configuration>
