@@ -46,11 +46,6 @@ public class RedisOptions {
             .stringType()
             .noDefaultValue();
 
-    public static final ConfigOption<String> PRIMARY_KEY = ConfigOptions
-            .key("primary.key")
-            .stringType()
-            .defaultValue("id");
-
     public static final ConfigOption<String> FIELD = ConfigOptions
             .key("field")
             .stringType()
@@ -61,15 +56,15 @@ public class RedisOptions {
             .stringType()
             .noDefaultValue();
 
-    public static final ConfigOption<Long> START = ConfigOptions
+    public static final ConfigOption<Integer> START = ConfigOptions
             .key("start")
-            .longType()
-            .noDefaultValue();
+            .intType()
+            .defaultValue(0);
 
-    public static final ConfigOption<Long> END = ConfigOptions
+    public static final ConfigOption<Integer> END = ConfigOptions
             .key("end")
-            .longType()
-            .noDefaultValue();
+            .intType()
+            .defaultValue(10);
 
     public static final ConfigOption<Integer> CONNECTION_MAX_WAIT_MILLS = ConfigOptions
             .key("connection.max.wait-mills")

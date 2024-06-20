@@ -22,19 +22,11 @@ public class RedisCommandOptions {
 
     public static final String RPUSH = "RPUSH";
 
-    public static final String LPOP = "LPOP";
-
-    public static final String RPOP = "RPOP";
-
     public static final String LRANGE = "LRANGE";
 
     public static final String SADD = "SADD";
 
     public static final String SMEMBERS = "SMEMBERS";
-
-    public static final String SSCAN = "SSCAN";
-
-    public static final String ZADD = "ZADD";
 
     public static final String ZRANGE = "ZRANGE";
 

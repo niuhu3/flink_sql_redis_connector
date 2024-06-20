@@ -19,9 +19,7 @@ import redis.clients.jedis.JedisCluster;
 import redis.clients.jedis.JedisPool;
 import redis.clients.jedis.ScanResult;
 
-import java.util.List;
-import java.util.Map;
-import java.util.Set;
+import java.util.*;
 
 
 public class RedisSourceFunction extends RichSourceFunction<RowData>{
@@ -37,8 +35,9 @@ public class RedisSourceFunction extends RichSourceFunction<RowData>{
     private String field;
     private String[] fields;
     private String cursor;
-    private Long start;
-    private Long end;
+    private Integer start;
+    private Integer end;
+    private String[] keySplit;
     private static int position = 1;
     private GenericRowData rowData;
     public RedisSourceFunction(ReadableConfig options, List<String> columns, List<String> primaryKey){
@@ -59,6 +58,12 @@ public class RedisSourceFunction extends RichSourceFunction<RowData>{
         Preconditions.checkNotNull(key,"key is null,please set value for key");
         String[] keyArr = key.split(RedisSplitSymbol.CLUSTER_NODES_SPLIT);
         String command = options.get(RedisOptions.COMMAND);
+
+        // judge if command is redis set data command and stop method
+        List<String> sourceCommand = Arrays.asList(RedisCommandOptions.SET, RedisCommandOptions.HSET, RedisCommandOptions.HMSET, RedisCommandOptions.LPUSH,
+                RedisCommandOptions.RPUSH, RedisCommandOptions.SADD);
+        if(sourceCommand.contains(command.toUpperCase())){ return;}
+
         Preconditions.checkNotNull(command,"command is null,please set value for command");
         String mode = options.get(RedisOptions.MODE);
         Preconditions.checkNotNull(command,"mode is null,please set value for mode");
@@ -91,66 +96,62 @@ public class RedisSourceFunction extends RichSourceFunction<RowData>{
                             break;
 
                         case RedisCommandOptions.HGET:
-                            field= columns.get(0);
+                            field = options.get(RedisOptions.FIELD);
                             value = jedis.hget(key, field);
                             rowData = new GenericRowData(3);
-                            rowData.setField(0,BinaryStringData.fromString(key));
-                            rowData.setField(1,BinaryStringData.fromString(field));
-                            rowData.setField(2,BinaryStringData.fromString(value));
+                            keySplit = key.split(RedisSplitSymbol.CLUSTER_HOST_PORT_SPLIT);
+
+                            for (int i = 0; i < primaryKey.size(); i++) {
+                                rowData.setField(i,BinaryStringData.fromString(keyArr[2 * primaryKey.size()]));
+                            }
+                            rowData.setField(primaryKey.size(),BinaryStringData.fromString(value));
                             break;
 
                         case RedisCommandOptions.HGETALL:
                             if (keyArr.length > 1){
                                 for (String str : keyArr) {
                                     rowData = new GenericRowData(columns.size());
-                                    String[] strings = str.split(RedisSplitSymbol.CLUSTER_HOST_PORT_SPLIT);
-                                    int j = 0;
-                                    for (int i = 1; i < columns.size(); i++) {
-                                        rowData.setField(j,BinaryStringData.fromString(strings[2*i]));
-                                        j++;
+                                    keySplit = str.split(RedisSplitSymbol.CLUSTER_HOST_PORT_SPLIT);
+
+                                    for (int i = 0; i < primaryKey.size(); i++) {
+                                        rowData.setField(i,BinaryStringData.fromString(keySplit[2 * primaryKey.size()]));
                                     }
 
-                                    for (int i = j; i < columns.size(); i++) {
+                                    for (int i = primaryKey.size(); i < columns.size(); i++) {
                                         String value = jedis.hget(str, columns.get(i));
-                                        rowData.setField(j,BinaryStringData.fromString(value));
-                                        j++;
+                                        rowData.setField(i,BinaryStringData.fromString(value));
                                     }
                                     ctx.collect(rowData);
                                 }
 
                             }else if(key.split(RedisSplitSymbol.CLUSTER_HOST_PORT_SPLIT).length == (primaryKey.size() * 2 + 1)){
                                 rowData = new GenericRowData(columns.size());
-                                rowData.setField(0,BinaryStringData.fromString(key));
-                                for (int i = 1; i < columns.size(); i++) {
-                                    String value = jedis.hget(key, columns.get(i));
-                                    rowData.setField(position,BinaryStringData.fromString(value));
-                                    position++;
+                                keySplit = key.split(RedisSplitSymbol.CLUSTER_HOST_PORT_SPLIT);
+                                for (int i = 0; i < primaryKey.size(); i++) {
+                                    rowData.setField(i,BinaryStringData.fromString(keySplit[2 * primaryKey.size()]));
                                 }
+
+                                for (int i = primaryKey.size(); i < columns.size(); i++) {
+                                    String value = jedis.hget(key, columns.get(i));
+                                    rowData.setField(i,BinaryStringData.fromString(value));
+                                }
+
+                                ctx.collect(rowData);
 
                             }else{
                                 //Fuzzy matching ,gets the data of the entire table
                                 String fuzzyKey = new StringBuffer(key).append("*").toString();
                                 Set<String> keys = jedis.keys(fuzzyKey);
                                 for (String keyStr : keys) {
-                                    position = 0;
+                                    keySplit = keyStr.split(RedisSplitSymbol.CLUSTER_HOST_PORT_SPLIT);
                                     rowData = new GenericRowData(columns.size());
-                                    if(primaryKey.size() == 1){
-                                        String[] strings = keyStr.split(RedisSplitSymbol.CLUSTER_HOST_PORT_SPLIT);
-                                        rowData.setField(0,BinaryStringData.fromString(strings[2]));
-                                    }else if(primaryKey.size() > 1){
-                                        String[] strings = keyStr.split(RedisSplitSymbol.CLUSTER_HOST_PORT_SPLIT);
-                                        for (int i = 0; i < (strings.length / 2); i++) {
-                                            rowData.setField(position,BinaryStringData.fromString(strings[(i + 1) * 2]));
-                                            position++;
-                                        }
-
+                                    for (int i = 0; i < primaryKey.size(); i++) {
+                                        rowData.setField(i,BinaryStringData.fromString(keySplit[2 * primaryKey.size()]));
                                     }
-
 
                                     for (int i = primaryKey.size(); i < columns.size(); i++) {
                                         String value = jedis.hget(keyStr, columns.get(i));
-                                        rowData.setField(position,BinaryStringData.fromString(value));
-                                        position++;
+                                        rowData.setField(i,BinaryStringData.fromString(value));
                                     }
 
                                     ctx.collect(rowData);
@@ -164,20 +165,19 @@ public class RedisSourceFunction extends RichSourceFunction<RowData>{
                             cursor = options.get(RedisOptions.CURSOR);
                             ScanResult<Map.Entry<String, String>> entries = jedis.hscan(key, cursor);
                             List<Map.Entry<String, String>> result = entries.getResult();
-                            rowData = new GenericRowData(result.size() * 2 +1);
-                            rowData.setField(0,BinaryStringData.fromString(key));
+                            keySplit = key.split(RedisSplitSymbol.CLUSTER_HOST_PORT_SPLIT);
+                            rowData = new GenericRowData(columns.size());
+                            for (int i = 0; i < primaryKey.size(); i++) {
+                                rowData.setField(i,BinaryStringData.fromString(keySplit[2 * primaryKey.size()]));
+                            }
 
+                            position = primaryKey.size();
                             for (int i = 0; i < result.size(); i++) {
-                                field = result.get(i).getKey();
-                                rowData.setField(position,BinaryStringData.fromString(field));
-                                position++;
                                 value = result.get(i).getValue();
                                 rowData.setField(position,BinaryStringData.fromString(value));
                                 position++;
                             }
                             break;
-
-
 
                         case RedisCommandOptions.LRANGE:
                             start = options.get(RedisOptions.START);
@@ -241,135 +241,142 @@ public class RedisSourceFunction extends RichSourceFunction<RowData>{
             jedisCluster = RedisUtil.getJedisCluster(mode, host, password, port, maxTotal,
                     maxIdle, maxWaitMills, connTimeOut, soTimeOut, maxAttempts, testOnBorrow, testOnReturn, testWhileIdle);
 
-            if(keyArr.length > 0){{
-                for (String key1 : keyArr) {
-                    switch (command.toUpperCase()){
-                        case RedisCommandOptions.GET:
-                            value = jedisCluster.get(key);
-                            rowData = new GenericRowData(2);
-                            rowData.setField(0,BinaryStringData.fromString(key));
-                            rowData.setField(1,BinaryStringData.fromString(value));
-                            break;
+            switch (command.toUpperCase()){
+                case RedisCommandOptions.GET:
+                    value = jedisCluster.get(key);
+                    rowData = new GenericRowData(2);
+                    rowData.setField(0,BinaryStringData.fromString(key));
+                    rowData.setField(1,BinaryStringData.fromString(value));
+                    break;
 
-                        case RedisCommandOptions.HGET:
-                            field = options.get(RedisOptions.FIELD);
-                            value = jedisCluster.hget(key, field);
-                            rowData = new GenericRowData(3);
-                            rowData.setField(0,BinaryStringData.fromString(key));
-                            rowData.setField(1,BinaryStringData.fromString(field));
-                            rowData.setField(2,BinaryStringData.fromString(value));
-                            break;
+                case RedisCommandOptions.HGET:
+                    field = options.get(RedisOptions.FIELD);
+                    value = jedisCluster.hget(key, field);
+                    rowData = new GenericRowData(3);
+                    keySplit = key.split(RedisSplitSymbol.CLUSTER_HOST_PORT_SPLIT);
 
-                        case RedisCommandOptions.HGETALL:
-                            if (keyArr.length > 1){
-                                for (String str : keyArr) {
-                                    rowData = new GenericRowData(columns.size());
-                                    rowData.setField(0,BinaryStringData.fromString(str));
-                                    for (int i = 1; i < columns.size(); i++) {
-                                        String value = jedisCluster.hget(str, columns.get(i));
-                                        rowData.setField(position,BinaryStringData.fromString(value));
-                                        position++;
-                                    }
-                                    ctx.collect(rowData);
-                                }
-
-                            }else if(key.split(RedisSplitSymbol.CLUSTER_HOST_PORT_SPLIT).length == 3){
-                                rowData = new GenericRowData(columns.size());
-                                rowData.setField(0,BinaryStringData.fromString(key));
-                                for (int i = 1; i < columns.size(); i++) {
-                                    String value = jedisCluster.hget(key, columns.get(i));
-                                    rowData.setField(position,BinaryStringData.fromString(value));
-                                    position++;
-                                }
-
-                            }else if(key.split(RedisSplitSymbol.CLUSTER_HOST_PORT_SPLIT).length <= 2){
-                                //Fuzzy matching ,gets the data of the entire table
-                                Set<String> keys = jedisCluster.keys(key);
-                                for (String keyStr : keys) {
-                                    position = 1;
-                                    rowData = new GenericRowData(columns.size());
-                                    if(primaryKey.size() == 1){
-                                        String[] strings = keyStr.split(RedisSplitSymbol.CLUSTER_HOST_PORT_SPLIT);
-                                        rowData.setField(0,BinaryStringData.fromString(strings[2]));
-                                    }else if(primaryKey.size() > 1){
-                                        String[] strings = keyStr.split(RedisSplitSymbol.CLUSTER_HOST_PORT_SPLIT);
-                                        rowData.setField(0,BinaryStringData.fromString(strings[2]));
-                                    }
-
-
-                                    for (int i = 1; i < columns.size(); i++) {
-                                        String value = jedisCluster.hget(keyStr, columns.get(i));
-                                        rowData.setField(position,BinaryStringData.fromString(value));
-                                        position++;
-                                    }
-
-                                    ctx.collect(rowData);
-
-                                }
-                            }
-
-                            break;
-
-                        case RedisCommandOptions.HSCAN:
-                            cursor = options.get(RedisOptions.CURSOR);
-                            ScanResult<Map.Entry<String, String>> entries = jedisCluster.hscan(key, cursor);
-                            List<Map.Entry<String, String>> result = entries.getResult();
-                            rowData = new GenericRowData(result.size() * 2 +1);
-                            rowData.setField(0,BinaryStringData.fromString(key));
-
-                            for (int i = 0; i < result.size(); i++) {
-                                field = result.get(i).getKey();
-                                rowData.setField(position,BinaryStringData.fromString(field));
-                                position++;
-                                value = result.get(i).getValue();
-                                rowData.setField(position,BinaryStringData.fromString(value));
-                                position++;
-                            }
-                            break;
-
-
-                        case RedisCommandOptions.LRANGE:
-                            start = options.get(RedisOptions.START);
-                            end = options.get(RedisOptions.END);
-                            List<String> list = jedisCluster.lrange(key, start, end);
-                            rowData = new GenericRowData(list.size() +1);
-                            rowData.setField(0,BinaryStringData.fromString(key));
-                            list.forEach(s -> {
-                                rowData.setField(position,BinaryStringData.fromString(s));
-                                position++;});
-
-                            break;
-
-                        case RedisCommandOptions.SMEMBERS:
-                            Set<String> smembers = jedisCluster.smembers(key);
-                            rowData = new GenericRowData(smembers.size() +1);
-                            rowData.setField(0,BinaryStringData.fromString(key));
-                            smembers.forEach(s -> {
-                                rowData.setField(position,BinaryStringData.fromString(s));
-                                position++;});
-                            break;
-
-                        case RedisCommandOptions.ZRANGE:
-                            start = options.get(RedisOptions.START);
-                            end = options.get(RedisOptions.END);
-                            Set<String> sets = jedisCluster.zrange(key, start, end);
-                            rowData = new GenericRowData(sets.size() +1);
-                            rowData.setField(0,BinaryStringData.fromString(key));
-                            sets.forEach(s -> {
-                                rowData.setField(position,BinaryStringData.fromString(s));
-                                position++;});
-                            break;
-
-
-                        default:
-                            LOG.error("Cannot process such data type: {}", command);
-                            break;
+                    for (int i = 0; i < primaryKey.size(); i++) {
+                        rowData.setField(i,BinaryStringData.fromString(keyArr[2 * primaryKey.size()]));
                     }
-                }
+                    rowData.setField(primaryKey.size(),BinaryStringData.fromString(value));
+                    break;
+
+                case RedisCommandOptions.HGETALL:
+                    if (keyArr.length > 1){
+                        for (String str : keyArr) {
+                            rowData = new GenericRowData(columns.size());
+                            keySplit = str.split(RedisSplitSymbol.CLUSTER_HOST_PORT_SPLIT);
+
+                            for (int i = 0; i < primaryKey.size(); i++) {
+                                rowData.setField(i,BinaryStringData.fromString(keySplit[2 * primaryKey.size()]));
+                            }
+
+                            for (int i = primaryKey.size(); i < columns.size(); i++) {
+                                String value = jedisCluster.hget(str, columns.get(i));
+                                rowData.setField(i,BinaryStringData.fromString(value));
+                            }
+                            ctx.collect(rowData);
+                        }
+
+                    }else if(key.split(RedisSplitSymbol.CLUSTER_HOST_PORT_SPLIT).length == (primaryKey.size() * 2 + 1)){
+                        rowData = new GenericRowData(columns.size());
+                        keySplit = key.split(RedisSplitSymbol.CLUSTER_HOST_PORT_SPLIT);
+                        for (int i = 0; i < primaryKey.size(); i++) {
+                            rowData.setField(i,BinaryStringData.fromString(keySplit[2 * primaryKey.size()]));
+                        }
+
+                        for (int i = primaryKey.size(); i < columns.size(); i++) {
+                            String value = jedisCluster.hget(key, columns.get(i));
+                            rowData.setField(i,BinaryStringData.fromString(value));
+                        }
+
+                        ctx.collect(rowData);
+
+                    }else{
+                        //Fuzzy matching ,gets the data of the entire table
+                        String fuzzyKey = new StringBuffer(key).append("*").toString();
+                        Set<String> keys = jedisCluster.keys(fuzzyKey);
+                        for (String keyStr : keys) {
+                            keySplit = keyStr.split(RedisSplitSymbol.CLUSTER_HOST_PORT_SPLIT);
+                            rowData = new GenericRowData(columns.size());
+                            for (int i = 0; i < primaryKey.size(); i++) {
+                                rowData.setField(i,BinaryStringData.fromString(keySplit[2 * primaryKey.size()]));
+                            }
+
+                            for (int i = primaryKey.size(); i < columns.size(); i++) {
+                                String value = jedisCluster.hget(keyStr, columns.get(i));
+                                rowData.setField(i,BinaryStringData.fromString(value));
+                            }
+
+                            ctx.collect(rowData);
+
+                        }
+                    }
+
+                    break;
+
+                case RedisCommandOptions.HSCAN:
+                    cursor = options.get(RedisOptions.CURSOR);
+                    ScanResult<Map.Entry<String, String>> entries = jedisCluster.hscan(key, cursor);
+                    List<Map.Entry<String, String>> result = entries.getResult();
+                    keySplit = key.split(RedisSplitSymbol.CLUSTER_HOST_PORT_SPLIT);
+                    rowData = new GenericRowData(columns.size());
+                    for (int i = 0; i < primaryKey.size(); i++) {
+                        rowData.setField(i,BinaryStringData.fromString(keySplit[2 * primaryKey.size()]));
+                    }
+
+                    position = primaryKey.size();
+                    for (int i = 0; i < result.size(); i++) {
+                        value = result.get(i).getValue();
+                        rowData.setField(position,BinaryStringData.fromString(value));
+                        position++;
+                    }
+                    break;
+
+
+
+                case RedisCommandOptions.LRANGE:
+                    start = options.get(RedisOptions.START);
+                    end = options.get(RedisOptions.END);
+                    List<String> list = jedisCluster.lrange(key, start, end);
+                    rowData = new GenericRowData(list.size() +1);
+                    rowData.setField(0,BinaryStringData.fromString(key));
+                    list.forEach(s -> {
+                        rowData.setField(position,BinaryStringData.fromString(s));
+                        position++;});
+
+                    break;
+
+                case RedisCommandOptions.SMEMBERS:
+                    Set<String> smembers = jedisCluster.smembers(key);
+                    rowData = new GenericRowData(smembers.size() +1);
+                    rowData.setField(0,BinaryStringData.fromString(key));
+                    smembers.forEach(s -> {
+                        rowData.setField(position,BinaryStringData.fromString(s));
+                        position++;});
+                    break;
+
+                case RedisCommandOptions.ZRANGE:
+                    start = options.get(RedisOptions.START);
+                    end = options.get(RedisOptions.END);
+                    Set<String> sets = jedisCluster.zrange(key, start, end);
+                    rowData = new GenericRowData(sets.size() +1);
+                    rowData.setField(0,BinaryStringData.fromString(key));
+                    sets.forEach(s -> {
+                        rowData.setField(position,BinaryStringData.fromString(s));
+                        position++;});
+                    break;
+
+
+                default:
+                    LOG.error("Cannot process such data type: {}", command);
+                    break;
             }
 
+            if(!command.toUpperCase().equals(RedisCommandOptions.HGETALL)){
                 ctx.collect(rowData);
             }
+
         }else{
             LOG.error("Unsupport such {} mode",mode);
         }

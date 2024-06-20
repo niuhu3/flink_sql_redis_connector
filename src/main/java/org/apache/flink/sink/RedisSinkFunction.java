@@ -44,12 +44,17 @@ public class RedisSinkFunction extends RichSinkFunction<RowData>{
 
     @Override
     public void invoke(RowData rowData, Context context) throws Exception {
+
         String password = options.get(RedisOptions.PASSWORD);
+        Preconditions.checkNotNull(password,"password is null,please set value for password");
         Integer expire = options.get(RedisOptions.EXPIRE);
-        String keyStr = options.get(RedisOptions.KEY);
-        String[] keyArr = keyStr.split(RedisSplitSymbol.CLUSTER_NODES_SPLIT);
+        String key = options.get(RedisOptions.KEY);
+        Preconditions.checkNotNull(key,"key is null,please set value for key");
         String command = options.get(RedisOptions.COMMAND);
+        Preconditions.checkNotNull(command,"command is null,please set value for command");
         String mode = options.get(RedisOptions.MODE);
+        Preconditions.checkNotNull(command,"mode is null,please set value for mode");
+
         Integer maxIdle = options.get(RedisOptions.CONNECTION_MAX_IDLE);
         Integer maxTotal = options.get(RedisOptions.CONNECTION_MAX_TOTAL);
         Integer maxWaitMills = options.get(RedisOptions.CONNECTION_MAX_WAIT_MILLS);
@@ -59,7 +64,7 @@ public class RedisSinkFunction extends RichSinkFunction<RowData>{
         Boolean testWhileIdle = options.get(RedisOptions.CONNECTION_TEST_WHILE_IDLE);
 
 
-        if (mode != null && mode.toUpperCase().equals(RedisClusterMode.SINGLE.name())) {
+        if (mode.toUpperCase().equals(RedisClusterMode.SINGLE.name())) {
 
             String host = options.get(RedisOptions.SINGLE_HOST);
             Integer port = options.get(RedisOptions.SINGLE_PORT);
@@ -68,93 +73,83 @@ public class RedisSinkFunction extends RichSinkFunction<RowData>{
             jedis = jedisPool.getResource();
             jedis.auth(password);
 
+            switch (command.toUpperCase()){
+                case RedisCommandOptions.SET:
+                    value = rowData.getString(0).toString();
+                    jedis.set(String.valueOf(key),String.valueOf(value));
+                    break;
 
-            if(command != null){
-                for (String key : keyArr) {
-                    switch (command.toUpperCase()){
-                        case RedisCommandOptions.SET:
-                            value = rowData.getString(0).toString();
-                            jedis.set(String.valueOf(key),String.valueOf(value));
+                case RedisCommandOptions.HSET:
+
+                    String field = columns.get(1);
+                    //construct redis key:table_name:primary key col name: primary key value
+                    redisTableKey = new StringBuffer(key).append(RedisSplitSymbol.CLUSTER_HOST_PORT_SPLIT);
+                    for (int i = 0; i < primaryKey.size(); i++) {
+                        if(primaryKey.size() <= 1){
+                            redisTableKey.append(primaryKey.get(i)).append(RedisSplitSymbol.CLUSTER_HOST_PORT_SPLIT);
+                            redisTableKey.append(rowData.getString(i).toString());
                             break;
-
-                        case RedisCommandOptions.HSET:
-
-                            String field = columns.get(1);
-                            //construct redis key:table_name:primary key col name: primary key value
-                            redisTableKey = new StringBuffer(key).append(RedisSplitSymbol.CLUSTER_HOST_PORT_SPLIT);
-
-                            for (int i = 0; i < primaryKey.size(); i++) {
-                                if(primaryKey.size() <= 1){
-                                    redisTableKey.append(primaryKey.get(i)).append(RedisSplitSymbol.CLUSTER_HOST_PORT_SPLIT);
-                                    redisTableKey.append(rowData.getString(i).toString());
-                                    break;
-                                }else{
-                                    redisTableKey.append(primaryKey.get(i)).append(RedisSplitSymbol.CLUSTER_HOST_PORT_SPLIT);
-                                    redisTableKey.append(rowData.getString(i).toString());
-                                }
-                                redisTableKey.append(RedisSplitSymbol.CLUSTER_HOST_PORT_SPLIT);
-                            }
-
-                            value = rowData.getString(1).toString();
-                            jedis.hset(String.valueOf(redisTableKey),String.valueOf(field),String.valueOf(value));
-
-                        case RedisCommandOptions.HMSET:
-                            //construct redis key:table_name:primary key col name: primary key value
-                            redisTableKey = new StringBuffer(key).append(RedisSplitSymbol.CLUSTER_HOST_PORT_SPLIT);
-
-                            for (int i = 0; i < primaryKey.size(); i++) {
-                                if(primaryKey.size() <= 1){
-                                    redisTableKey.append(primaryKey.get(i)).append(RedisSplitSymbol.CLUSTER_HOST_PORT_SPLIT);
-                                    redisTableKey.append(rowData.getString(i).toString());
-                                    break;
-                                }else{
-                                    redisTableKey.append(primaryKey.get(i)).append(RedisSplitSymbol.CLUSTER_HOST_PORT_SPLIT);
-                                    redisTableKey.append(rowData.getString(i).toString());
-                                }
-                                if (i != primaryKey.size() -1){
-                                    redisTableKey.append(RedisSplitSymbol.CLUSTER_HOST_PORT_SPLIT);
-                                }
-
-                            }
-                            for (int i = 1; i < columns.size(); i++) {
-                                if (!primaryKey.contains(columns.get(i))){
-                                    value = rowData.getString(i).toString();
-                                    jedis.hset(String.valueOf(redisTableKey),String.valueOf(columns.get(i)),String.valueOf(value));
-                                }
-                            }
-
-                            break;
-
-                        case RedisCommandOptions.LPUSH:
-                            value = rowData.getString(0).toString();
-                            jedis.lpush(key,value);
-
-                            break;
-
-
-                        case RedisCommandOptions.RPUSH:
-                            value = rowData.getString(0).toString();
-                            jedis.rpush(key,value);
-
-                            break;
-
-                        case RedisCommandOptions.SADD:
-                            value = rowData.getString(0).toString();
-                            jedis.sadd(key,value);
-                            break;
-
-                        default:
-                            LOG.error("Cannot process such data type: {}", command);
-                            break;
+                        }else{
+                            redisTableKey.append(primaryKey.get(i)).append(RedisSplitSymbol.CLUSTER_HOST_PORT_SPLIT);
+                            redisTableKey.append(rowData.getString(i).toString());
+                        }
+                        redisTableKey.append(RedisSplitSymbol.CLUSTER_HOST_PORT_SPLIT);
                     }
-                }
 
+                    value = rowData.getString(1).toString();
+                    jedis.hset(String.valueOf(redisTableKey),String.valueOf(field),String.valueOf(value));
 
+                case RedisCommandOptions.HMSET:
+                    //construct redis key:table_name:primary key col name: primary key value
+                    redisTableKey = new StringBuffer(key).append(RedisSplitSymbol.CLUSTER_HOST_PORT_SPLIT);
 
+                    for (int i = 0; i < primaryKey.size(); i++) {
+                        if(primaryKey.size() <= 1){
+                            redisTableKey.append(primaryKey.get(i)).append(RedisSplitSymbol.CLUSTER_HOST_PORT_SPLIT);
+                            redisTableKey.append(rowData.getString(i).toString());
+                            break;
+                        }else{
+                            redisTableKey.append(primaryKey.get(i)).append(RedisSplitSymbol.CLUSTER_HOST_PORT_SPLIT);
+                            redisTableKey.append(rowData.getString(i).toString());
+                        }
+                        if (i != primaryKey.size() -1){
+                            redisTableKey.append(RedisSplitSymbol.CLUSTER_HOST_PORT_SPLIT);
+                        }
 
+                    }
+                    for (int i = 1; i < columns.size(); i++) {
+                        if (!primaryKey.contains(columns.get(i))){
+                            value = rowData.getString(i).toString();
+                            jedis.hset(String.valueOf(redisTableKey),String.valueOf(columns.get(i)),String.valueOf(value));
+                        }
+                    }
+
+                    break;
+
+                case RedisCommandOptions.LPUSH:
+                    value = rowData.getString(0).toString();
+                    jedis.lpush(key,value);
+
+                    break;
+
+                case RedisCommandOptions.RPUSH:
+                    value = rowData.getString(0).toString();
+                    jedis.rpush(key,value);
+
+                    break;
+
+                case RedisCommandOptions.SADD:
+                    value = rowData.getString(0).toString();
+                    jedis.sadd(key,value);
+                    break;
+
+                default:
+                    LOG.error("Cannot process such data type: {}", command);
+                    break;
             }
 
-        }else if(mode != null && mode.toUpperCase().equals(RedisClusterMode.CLUSTER.name())){
+
+        }else if(mode.toUpperCase().equals(RedisClusterMode.CLUSTER.name())){
             String nodes = options.get(RedisOptions.CLUSTER_NODES);
             String[] hostAndPorts = nodes.split(RedisSplitSymbol.CLUSTER_NODES_SPLIT);
             String[] host = new String[hostAndPorts.length];
@@ -172,87 +167,81 @@ public class RedisSinkFunction extends RichSinkFunction<RowData>{
             jedisCluster = RedisUtil.getJedisCluster(mode, host, password, port, maxTotal,
                     maxIdle, maxWaitMills, connTimeOut, soTimeOut, maxAttempts, testOnBorrow, testOnReturn, testWhileIdle);
 
-            if(command != null){
-                for (String key : keyArr) {
-                    switch (command.toUpperCase()){
-                        case RedisCommandOptions.SET:
-                            value = rowData.getString(0).toString();
-                            jedisCluster.set(String.valueOf(key),String.valueOf(value));
+            switch (command.toUpperCase()){
+                case RedisCommandOptions.SET:
+                    value = rowData.getString(0).toString();
+                    jedisCluster.set(String.valueOf(key),String.valueOf(value));
+                    break;
+
+                case RedisCommandOptions.HSET:
+
+                    String field = columns.get(1);
+                    //construct redis key:table_name:primary key col name: primary key value
+                    redisTableKey = new StringBuffer(key).append(RedisSplitSymbol.CLUSTER_HOST_PORT_SPLIT);
+
+                    for (int i = 0; i < primaryKey.size(); i++) {
+                        if(primaryKey.size() <= 1){
+                            redisTableKey.append(primaryKey.get(i)).append(RedisSplitSymbol.CLUSTER_HOST_PORT_SPLIT);
+                            redisTableKey.append(rowData.getString(i).toString());
                             break;
-
-                        case RedisCommandOptions.HSET:
-
-                            String field = columns.get(1);
-                            //construct redis key:table_name:primary key col name: primary key value
-                            redisTableKey = new StringBuffer(key).append(RedisSplitSymbol.CLUSTER_HOST_PORT_SPLIT);
-
-                            for (int i = 0; i < primaryKey.size(); i++) {
-                                if(primaryKey.size() <= 1){
-                                    redisTableKey.append(primaryKey.get(i)).append(RedisSplitSymbol.CLUSTER_HOST_PORT_SPLIT);
-                                    redisTableKey.append(rowData.getString(i).toString());
-                                    break;
-                                }else{
-                                    redisTableKey.append(primaryKey.get(i)).append(RedisSplitSymbol.CLUSTER_HOST_PORT_SPLIT);
-                                    redisTableKey.append(rowData.getString(i).toString());
-                                }
-                                redisTableKey.append(RedisSplitSymbol.CLUSTER_HOST_PORT_SPLIT);
-                            }
-
-                            value = rowData.getString(1).toString();
-                            jedisCluster.hset(String.valueOf(redisTableKey),String.valueOf(field),String.valueOf(value));
-
-                        case RedisCommandOptions.HMSET:
-                            //construct redis key:table_name:primary key col name: primary key value
-                            redisTableKey = new StringBuffer(key).append(RedisSplitSymbol.CLUSTER_HOST_PORT_SPLIT);
-
-                            for (int i = 0; i < primaryKey.size(); i++) {
-                                if(primaryKey.size() <= 1){
-                                    redisTableKey.append(primaryKey.get(i)).append(RedisSplitSymbol.CLUSTER_HOST_PORT_SPLIT);
-                                    redisTableKey.append(rowData.getString(i).toString());
-                                    break;
-                                }else{
-                                    redisTableKey.append(primaryKey.get(i)).append(RedisSplitSymbol.CLUSTER_HOST_PORT_SPLIT);
-                                    redisTableKey.append(rowData.getString(i).toString());
-                                }
-                                redisTableKey.append(RedisSplitSymbol.CLUSTER_HOST_PORT_SPLIT);
-                            }
-
-                            for (int i = 1; i < columns.size(); i++) {
-                                value = rowData.getString(i).toString();
-                                jedisCluster.hset(String.valueOf(redisTableKey),String.valueOf(columns.get(i)),String.valueOf(value));
-                            }
-
-                            break;
-
-                        case RedisCommandOptions.LPUSH:
-                            value = rowData.getString(0).toString();
-                            jedisCluster.lpush(key,value);
-
-                            break;
-
-
-                        case RedisCommandOptions.RPUSH:
-                            value = rowData.getString(0).toString();
-                            jedisCluster.rpush(key,value);
-
-                            break;
-
-                        case RedisCommandOptions.SADD:
-                            value = rowData.getString(0).toString();
-                            jedisCluster.sadd(key,value);
-                            break;
-
-
-                        default:
-                            LOG.error("Cannot process such data type: {}", command);
-                            break;
+                        }else{
+                            redisTableKey.append(primaryKey.get(i)).append(RedisSplitSymbol.CLUSTER_HOST_PORT_SPLIT);
+                            redisTableKey.append(rowData.getString(i).toString());
+                        }
+                        redisTableKey.append(RedisSplitSymbol.CLUSTER_HOST_PORT_SPLIT);
                     }
-                }
+
+                    value = rowData.getString(1).toString();
+                    jedisCluster.hset(String.valueOf(redisTableKey),String.valueOf(field),String.valueOf(value));
+
+                case RedisCommandOptions.HMSET:
+                    //construct redis key:table_name:primary key col name: primary key value
+                    redisTableKey = new StringBuffer(key).append(RedisSplitSymbol.CLUSTER_HOST_PORT_SPLIT);
+
+                    for (int i = 0; i < primaryKey.size(); i++) {
+                        if(primaryKey.size() <= 1){
+                            redisTableKey.append(primaryKey.get(i)).append(RedisSplitSymbol.CLUSTER_HOST_PORT_SPLIT);
+                            redisTableKey.append(rowData.getString(i).toString());
+                            break;
+                        }else{
+                            redisTableKey.append(primaryKey.get(i)).append(RedisSplitSymbol.CLUSTER_HOST_PORT_SPLIT);
+                            redisTableKey.append(rowData.getString(i).toString());
+                        }
+                        redisTableKey.append(RedisSplitSymbol.CLUSTER_HOST_PORT_SPLIT);
+                    }
+
+                    for (int i = 1; i < columns.size(); i++) {
+                        value = rowData.getString(i).toString();
+                        jedisCluster.hset(String.valueOf(redisTableKey),String.valueOf(columns.get(i)),String.valueOf(value));
+                    }
+
+                    break;
+
+                case RedisCommandOptions.LPUSH:
+                    value = rowData.getString(0).toString();
+                    jedisCluster.lpush(key,value);
+
+                    break;
 
 
+                case RedisCommandOptions.RPUSH:
+                    value = rowData.getString(0).toString();
+                    jedisCluster.rpush(key,value);
+
+                    break;
+
+                case RedisCommandOptions.SADD:
+                    value = rowData.getString(0).toString();
+                    jedisCluster.sadd(key,value);
+                    break;
 
 
+                default:
+                    LOG.error("Cannot process such data type: {}", command);
+                    break;
             }
+
+
 
 
         }else{

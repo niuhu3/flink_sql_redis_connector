@@ -82,7 +82,6 @@ public class RedisSourceSinkFactory implements DynamicTableSinkFactory, DynamicT
         options.add(RedisOptions.SINGLE_PORT);
         options.add(RedisOptions.CLUSTER_NODES);
         options.add(RedisOptions.FIELD);
-        options.add(RedisOptions.PRIMARY_KEY);
         options.add(RedisOptions.CURSOR);
         options.add(RedisOptions.EXPIRE);
         options.add(RedisOptions.COMMAND);
