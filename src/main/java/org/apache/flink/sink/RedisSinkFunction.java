@@ -99,6 +99,12 @@ public class RedisSinkFunction extends RichSinkFunction<RowData>{
                     value = rowData.getString(1).toString();
                     jedis.hset(String.valueOf(redisTableKey),String.valueOf(field),String.valueOf(value));
 
+                    if(expire != null){
+                        jedis.expire(String.valueOf(redisTableKey),expire);
+                    }
+
+                    break;
+
                 case RedisCommandOptions.HMSET:
                     //construct redis key:table_name:primary key col name: primary key value
                     redisTableKey = new StringBuffer(key).append(RedisSplitSymbol.CLUSTER_HOST_PORT_SPLIT);
@@ -124,6 +130,10 @@ public class RedisSinkFunction extends RichSinkFunction<RowData>{
                         }
                     }
 
+                    if(expire != null){
+                        jedis.expire(String.valueOf(redisTableKey),expire);
+                    }
+
                     break;
 
                 case RedisCommandOptions.LPUSH:
@@ -146,6 +156,10 @@ public class RedisSinkFunction extends RichSinkFunction<RowData>{
                 default:
                     LOG.error("Cannot process such data type: {}", command);
                     break;
+            }
+
+            if(expire != null && (!command.toUpperCase().equals(RedisCommandOptions.HSET) && !command.toUpperCase().equals(RedisCommandOptions.HMSET)) ){
+                jedis.expire(String.valueOf(redisTableKey),expire);
             }
 
 
@@ -194,6 +208,12 @@ public class RedisSinkFunction extends RichSinkFunction<RowData>{
                     value = rowData.getString(1).toString();
                     jedisCluster.hset(String.valueOf(redisTableKey),String.valueOf(field),String.valueOf(value));
 
+                    if(expire != null){
+                        jedis.expire(String.valueOf(redisTableKey),expire);
+                    }
+
+                    break;
+
                 case RedisCommandOptions.HMSET:
                     //construct redis key:table_name:primary key col name: primary key value
                     redisTableKey = new StringBuffer(key).append(RedisSplitSymbol.CLUSTER_HOST_PORT_SPLIT);
@@ -213,6 +233,10 @@ public class RedisSinkFunction extends RichSinkFunction<RowData>{
                     for (int i = 1; i < columns.size(); i++) {
                         value = rowData.getString(i).toString();
                         jedisCluster.hset(String.valueOf(redisTableKey),String.valueOf(columns.get(i)),String.valueOf(value));
+                    }
+
+                    if(expire != null){
+                        jedis.expire(String.valueOf(redisTableKey),expire);
                     }
 
                     break;
@@ -241,7 +265,9 @@ public class RedisSinkFunction extends RichSinkFunction<RowData>{
                     break;
             }
 
-
+            if(expire != null && (!command.toUpperCase().equals(RedisCommandOptions.HSET) && !command.toUpperCase().equals(RedisCommandOptions.HMSET)) ){
+                jedis.expire(String.valueOf(redisTableKey),expire);
+            }
 
 
         }else{

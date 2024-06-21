@@ -101,34 +101,7 @@
             </plugin>
 
 
-            <plugin>
-                <!-- Extract parser grammar template from calcite-core.jar and put
-                     it under ${project.build.directory} where all freemarker templates are. -->
-                <groupId>org.apache.maven.plugins</groupId>
-                <artifactId>maven-dependency-plugin</artifactId>
-                <executions>
-                    <execution>
-                        <id>unpack-parser-template</id>
-                        <phase>initialize</phase>
-                        <goals>
-                            <goal>unpack</goal>
-                        </goals>
-                        <configuration>
-                            <artifactItems>
-                                <artifactItem>
-                                    <groupId>org.apache.calcite</groupId>
-                                    <artifactId>calcite-core</artifactId>
-                                    <type>jar</type>
-                                    <overWrite>true</overWrite>
-                                    <outputDirectory>${project.build.directory}/</outputDirectory>
-                                    <includes>**/Parser.jj</includes>
-                                </artifactItem>
-                            </artifactItems>
-                        </configuration>
-                    </execution>
-                </executions>
-            </plugin>
-
+<!--
             <plugin>
                 <artifactId>maven-resources-plugin</artifactId>
                 <executions>
@@ -178,7 +151,7 @@
             </plugin>
 
             <plugin>
-                <!-- This must be run AFTER the fmpp-maven-plugin -->
+                &lt;!&ndash; This must be run AFTER the fmpp-maven-plugin &ndash;&gt;
                 <groupId>org.codehaus.mojo</groupId>
                 <artifactId>javacc-maven-plugin</artifactId>
                 <version>2.4</version>
@@ -194,14 +167,14 @@
                             <includes>
                                 <include>**/Parser.jj</include>
                             </includes>
-                            <!-- This must be kept synced with Apache Calcite. -->
+                            &lt;!&ndash; This must be kept synced with Apache Calcite. &ndash;&gt;
                             <lookAhead>1</lookAhead>
                             <isStatic>false</isStatic>
                             <outputDirectory>${project.build.directory}/generated-sources/</outputDirectory>
                         </configuration>
                     </execution>
                 </executions>
-            </plugin>
+            </plugin>-->
 
         </plugins>
     </build>
