@@ -14,7 +14,7 @@ public class RedisUtil {
     public static  ShardedJedisPool shardedJedisPool;
     public static JedisCluster jedisCluster;
 
-    public static JedisPool getSingleJedisPool(
+    public static Jedis getSingleJedis(
             String mode, String host, int port,
             int maxTotal, int maxIdle , int maxWaitMills,
             boolean testOnBorrow, boolean testOnReturn, boolean testWhileIdle){
@@ -31,33 +31,11 @@ public class RedisUtil {
             jedisPool = new JedisPool(config,host,port);
 
         }
-        return jedisPool;
+        return jedisPool.getResource();
 
     }
 
-    public static ShardedJedisPool getShardInfosJedisPool(String mode, String[] host, int[] port,
-                                                          int maxTotal, int maxIdle , int maxWaitMills,
-                                                          boolean testOnBorrow, boolean testOnReturn, boolean testWhileIdle){
 
-        if(shardedJedisPool == null && mode.toUpperCase().equals(RedisClusterMode.SHARDING_CLUSTER.name())){
-
-            JedisPoolConfig config = new JedisPoolConfig();
-            config.setMaxTotal(maxTotal);
-            config.setMaxIdle(maxIdle);
-            config.setMaxWaitMillis(maxWaitMills);
-            config.setTestOnBorrow(testOnBorrow);
-            config.setTestOnBorrow(testOnReturn);
-            config.setTestOnBorrow(testWhileIdle);
-
-            ArrayList<JedisShardInfo> shardInfos = new ArrayList<>();
-            for (int i = 0; i < host.length; i++) {
-                shardInfos.add(new JedisShardInfo(host[i],port[i]));
-            }
-
-            shardedJedisPool = new ShardedJedisPool(config,shardInfos);
-        }
-        return shardedJedisPool;
-    }
 
 
         public static JedisCluster getJedisCluster(

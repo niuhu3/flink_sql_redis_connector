@@ -3,7 +3,10 @@ package org.apache.flink.common;
 import org.apache.commons.pool2.impl.GenericObjectPoolConfig;
 import org.apache.flink.configuration.ConfigOption;
 import org.apache.flink.configuration.ConfigOptions;
+import org.apache.flink.connector.base.DeliveryGuarantee;
 import redis.clients.jedis.Protocol;
+
+import java.time.Duration;
 
 public class RedisOptions {
 
@@ -13,6 +16,7 @@ public class RedisOptions {
             .key("mode")
             .stringType()
             .defaultValue("single");
+
     public static final ConfigOption<String> SINGLE_HOST = ConfigOptions
             .key("single.host")
             .stringType()
@@ -65,6 +69,43 @@ public class RedisOptions {
             .key("end")
             .intType()
             .defaultValue(10);
+
+    public static final ConfigOption<Duration> LOOKUP_RETRY_INTERVAL =
+            ConfigOptions.key("lookup.retry.interval")
+                    .durationType()
+                    .defaultValue(Duration.ofMillis(1000L))
+                    .withDescription(
+                            "Specifies the retry time interval if lookup records from database failed.");
+
+    public static final ConfigOption<Integer> BUFFER_FLUSH_MAX_ROWS =
+            ConfigOptions.key("sink.buffer-flush.max-rows")
+                    .intType()
+                    .defaultValue(1000)
+                    .withDescription(
+                            "Specifies the maximum number of buffered rows per batch request.");
+
+    public static final ConfigOption<Duration> BUFFER_FLUSH_INTERVAL =
+            ConfigOptions.key("sink.buffer-flush.interval")
+                    .durationType()
+                    .defaultValue(Duration.ofSeconds(1))
+                    .withDescription("Specifies the batch flush interval.");
+
+    public static final ConfigOption<DeliveryGuarantee> DELIVERY_GUARANTEE =
+            ConfigOptions.key("sink.delivery-guarantee")
+                    .enumType(DeliveryGuarantee.class)
+                    .defaultValue(DeliveryGuarantee.AT_LEAST_ONCE)
+                    .withDescription(
+                            "Optional delivery guarantee when committing. The exactly-once guarantee is not supported yet.");
+
+
+    public static final ConfigOption<Integer> SINK_PARALLELISM =
+            ConfigOptions.key("sink.parallelism")
+                    .intType()
+                    .defaultValue(4)
+                    .withDescription(
+                            "Defines a custom parallelism for the sink. "
+                                    + "By default, if this option is not defined, the planner will derive the parallelism "
+                                    + "for each statement individually by also considering the global configuration.");
 
     public static final ConfigOption<Integer> CONNECTION_MAX_WAIT_MILLS = ConfigOptions
             .key("connection.max.wait-mills")

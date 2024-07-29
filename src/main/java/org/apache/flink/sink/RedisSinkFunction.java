@@ -24,6 +24,7 @@ public class RedisSinkFunction extends RichSinkFunction<RowData>{
 
     private static final Logger LOG = LoggerFactory.getLogger(RedisSinkFunction.class);
 
+
     private ReadableConfig options;
     private List<String> primaryKey;
     private List<String> columns;
@@ -68,9 +69,8 @@ public class RedisSinkFunction extends RichSinkFunction<RowData>{
 
             String host = options.get(RedisOptions.SINGLE_HOST);
             Integer port = options.get(RedisOptions.SINGLE_PORT);
-            JedisPool jedisPool = RedisUtil.getSingleJedisPool(mode, host, port, maxTotal,
+            jedis = RedisUtil.getSingleJedis(mode, host, port, maxTotal,
                     maxIdle, maxWaitMills, testOnBorrow, testOnReturn, testWhileIdle);
-            jedis = jedisPool.getResource();
             jedis.auth(password);
 
             switch (command.toUpperCase()){

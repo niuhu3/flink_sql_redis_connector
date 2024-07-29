@@ -1,59 +1,69 @@
 package org.apache.flink.sink;
 
+import org.apache.flink.common.RedisOptions;
 import org.apache.flink.configuration.ReadableConfig;
 import org.apache.flink.table.connector.ChangelogMode;
 import org.apache.flink.table.connector.sink.DynamicTableSink;
-import org.apache.flink.table.connector.sink.SinkFunctionProvider;
-import org.apache.flink.types.RowKind;
+import org.apache.flink.table.connector.sink.SinkV2Provider;
+import org.apache.flink.table.data.RowData;
 import org.apache.flink.util.Preconditions;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 import java.util.List;
-
+import java.util.Objects;
 
 public class RedisDynamicTableSink implements DynamicTableSink {
 
-    private static final long serialVersionUID = 1L;
-
-    private static final Logger LOG = LoggerFactory.getLogger(RedisDynamicTableSink.class);
-
-    private ReadableConfig options;
+    private final ReadableConfig options;
     private List<String> primaryKey;
     private List<String> columns;
 
-    public RedisDynamicTableSink(ReadableConfig options, List<String> columns, List<String> primaryKey) {
+    public RedisDynamicTableSink(ReadableConfig options, List<String> primaryKey, List<String> columns) {
         this.options = Preconditions.checkNotNull(options);
-        this.columns = Preconditions.checkNotNull(columns);
         this.primaryKey = Preconditions.checkNotNull(primaryKey);
+        this.columns = Preconditions.checkNotNull(columns);
+
     }
 
     @Override
-    public ChangelogMode getChangelogMode(ChangelogMode changelogMode) {
-        return ChangelogMode.newBuilder()
-                .addContainedKind(RowKind.INSERT)
-                .addContainedKind(RowKind.DELETE)
-                .addContainedKind(RowKind.UPDATE_BEFORE)
-                .addContainedKind(RowKind.UPDATE_AFTER)
-                .build();
+    public ChangelogMode getChangelogMode(ChangelogMode requestedMode) {
 
+        return ChangelogMode.insertOnly();
     }
 
     @Override
     public SinkRuntimeProvider getSinkRuntimeProvider(Context context) {
-        RedisSinkFunction myRedisSinkFunction = new RedisSinkFunction(this.options,this.columns,this.primaryKey);
-        return SinkFunctionProvider.of(myRedisSinkFunction);
 
+        RedisSink<RowData> redisSink = new RedisSink<>(options, primaryKey, columns);
+        Integer parallelism = options.get(RedisOptions.SINK_PARALLELISM);
+
+        return SinkV2Provider.of(redisSink,parallelism);
     }
 
     @Override
-    public DynamicTableSink copy() {
-        return new RedisDynamicTableSink(this.options,this.columns,this.primaryKey);
+    public RedisDynamicTableSink copy() {
+        return new RedisDynamicTableSink(options, primaryKey, columns);
     }
 
     @Override
     public String asSummaryString() {
-        return "redis table sink";
+        return "redis sink";
+    }
+
+    @Override
+    public boolean equals(Object o) {
+        if (this == o) return true;
+        if (o == null || getClass() != o.getClass()) return false;
+        RedisDynamicTableSink that = (RedisDynamicTableSink) o;
+        return Objects.equals(options, that.options) &&
+                Objects.equals(primaryKey, that.primaryKey) &&
+                Objects.equals(columns, that.columns);
+    }
+
+    @Override
+    public int hashCode() {
+        return Objects.hash(options, primaryKey, columns);
     }
 }
+
+
 

@@ -1,11 +1,15 @@
 package org.apache.flink;
 
 
+import org.apache.flink.api.connector.source.Boundedness;
 import org.apache.flink.common.RedisOptions;
 import org.apache.flink.configuration.ConfigOption;
 import org.apache.flink.configuration.ReadableConfig;
 import org.apache.flink.sink.RedisDynamicTableSink;
+import org.apache.flink.sink.RedisSink;
 import org.apache.flink.source.RedisDynamicTableSource;
+import org.apache.flink.source.RedisSourceFactory;
+import org.apache.flink.source.RedisSourceFunctionV2;
 import org.apache.flink.table.catalog.Column;
 import org.apache.flink.table.catalog.ResolvedSchema;
 import org.apache.flink.table.connector.sink.DynamicTableSink;
@@ -42,7 +46,9 @@ public class RedisSourceSinkFactory implements DynamicTableSinkFactory, DynamicT
         ArrayList<String> columnNames = new ArrayList<>();
         columns.forEach(column -> columnNames.add(column.getName()));
         List<String> primaryKey = schema.getPrimaryKey().get().getColumns();
-        return new RedisDynamicTableSource(options,columnNames,primaryKey);
+        //return new RedisDynamicTableSource(options,columnNames,primaryKey);
+        return new RedisSourceFactory(options,primaryKey,columnNames);
+
 
     }
 
@@ -56,7 +62,9 @@ public class RedisSourceSinkFactory implements DynamicTableSinkFactory, DynamicT
         columns.forEach(column -> columnNames.add(column.getName()));
         List<String> primaryKey = schema.getPrimaryKey().get().getColumns();
         ReadableConfig options = helper.getOptions();
-        return new RedisDynamicTableSink(options,columnNames,primaryKey);
+
+        //return new RedisDynamicTableSink(options,columnNames,primaryKey);
+        return new RedisDynamicTableSink(options,primaryKey,columnNames);
     }
 
 
@@ -97,7 +105,11 @@ public class RedisSourceSinkFactory implements DynamicTableSinkFactory, DynamicT
         options.add(RedisOptions.LOOKUP_ADDITIONAL_KEY);
         options.add(RedisOptions.LOOKUP_CACHE_MAX_ROWS);
         options.add(RedisOptions.LOOKUP_CACHE_TTL_SEC);
-
+        options.add(RedisOptions.SINK_PARALLELISM);
+        options.add(RedisOptions.DELIVERY_GUARANTEE);
+        options.add(RedisOptions.BUFFER_FLUSH_INTERVAL);
+        options.add(RedisOptions.BUFFER_FLUSH_MAX_ROWS);
+        options.add(RedisOptions.LOOKUP_RETRY_INTERVAL);
         return options;
     }
 
