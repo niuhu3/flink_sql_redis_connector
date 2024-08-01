@@ -12,7 +12,7 @@ public class RedisUtil {
 
     public static  JedisPool jedisPool;
     public static  ShardedJedisPool shardedJedisPool;
-    public static JedisCluster jedisCluster;
+    public static JedisClusterPipeline jedisClusterPipeline;
 
     public static Jedis getSingleJedis(
             String mode, String host, int port,
@@ -38,13 +38,13 @@ public class RedisUtil {
 
 
 
-        public static JedisCluster getJedisCluster(
+        public static JedisClusterPipeline getJedisCluster(
                 String mode, String[] host, String password, int[] port,
                 int maxTotal, int maxIdle , int maxWaitMills ,
                 int connTimeOut, int soTimeOut, int maxAttempts,
                 boolean testOnBorrow, boolean testOnReturn, boolean testWhileIdle){
 
-            if(jedisCluster == null && mode.toUpperCase().equals(RedisClusterMode.CLUSTER.name())){
+            if(jedisClusterPipeline == null && mode.toUpperCase().equals(RedisClusterMode.CLUSTER.name())){
 
                 JedisPoolConfig config = new JedisPoolConfig();
                 config.setMaxTotal(maxTotal);
@@ -58,12 +58,14 @@ public class RedisUtil {
                 Set<HostAndPort> hostAndPorts = new HashSet<>();
                 for (int i = 0; i < host.length; i++) {
                     hostAndPorts.add(new HostAndPort(host[i],port[i]));
+
                 }
 
-                jedisCluster = new JedisCluster(hostAndPorts,connTimeOut,soTimeOut,maxAttempts,password,config);
+                jedisClusterPipeline = new JedisClusterPipeline(hostAndPorts,connTimeOut,soTimeOut,maxAttempts,password,config);
+
 
             }
-            return jedisCluster;
+            return jedisClusterPipeline;
         }
 
 
