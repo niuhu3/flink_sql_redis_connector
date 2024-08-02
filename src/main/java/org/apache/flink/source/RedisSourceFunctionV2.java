@@ -31,7 +31,7 @@ public class RedisSourceFunctionV2<OUT> implements
     private  List<String> columns;
 
 
-    /** The boundedness for MongoDB source. */
+    /** The boundedness for redis source. */
     private final Boundedness boundedness;
 
 
@@ -76,7 +76,7 @@ public class RedisSourceFunctionV2<OUT> implements
 
     @Override
     public SimpleVersionedSerializer getEnumeratorCheckpointSerializer() {
-        return null;
+        return new  RedisSourceSplitSerializer(options);
     }
 
     @Override
